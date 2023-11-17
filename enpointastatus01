@@ -1,0 +1,302 @@
+
+package model;
+
+
+public class EstadoTotal {
+    private String estado;
+    private int total;
+    
+    public EstadoTotal(){}
+
+    public EstadoTotal(String estado, int total) {
+        this.estado = estado;
+        this.total = total;
+    }
+
+    // Getters y setters
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public int getTotal() {
+        return total;
+    }
+
+    public void setTotal(int total) {
+        this.total = total;
+    }
+}
+
+
+package dao;
+
+import model.EstadoTotal;
+        
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+
+
+public class Solicitudes {
+    
+     // Asumiendo que IVTConexionDB y sus métodos son accesibles y correctos
+    private IVTConexionDB dbConnection = new IVTConexionDB();
+
+    public List<EstadoTotal> obtenerTotalesPorStatus(String fechaInicio, String fechaFin) {
+        Connection con = dbConnection.getConnection();
+        List<EstadoTotal> totalesPorStatus = new ArrayList<>();
+
+        if (con != null) {
+            String query = "SELECT Status, COUNT(*) as Total " +
+                           "FROM Incident " +
+                           "WHERE ( " +
+                           "CreatedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN " +
+                           "CONVERT(datetime, ?, 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' " +
+                           "AND " +
+                           "CONVERT(datetime, ?, 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' " +
+                           "OR " +
+                           "ResolvedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN " +
+                           "CONVERT(datetime, ?, 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' " +
+                           "AND " +
+                           "CONVERT(datetime, ?, 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' " +
+                           ") " +
+                           "GROUP BY Status " +
+                           "ORDER BY Status";
+            try (PreparedStatement pstmt = con.prepareStatement(query)) {
+                pstmt.setString(1, fechaInicio);
+                pstmt.setString(2, fechaFin);
+                pstmt.setString(3, fechaInicio);
+                pstmt.setString(4, fechaFin);
+                ResultSet rs = pstmt.executeQuery();
+
+                while (rs.next()) {
+                    String status = rs.getString("Status");
+                    int total = rs.getInt("Total");
+                     totalesPorStatus.add(new EstadoTotal(status, total)); // Agrega un objeto EstadoTotal
+                }
+            } catch (SQLException e) {
+                System.out.println("Error en la consulta SQL: " + e.getMessage());
+            } finally {
+                try {
+                    con.close();
+                } catch (SQLException e) {
+                    System.out.println("Error al cerrar la conexión: " + e.getMessage());
+                }
+            }
+        }
+        return totalesPorStatus;
+    }
+    
+     public static void main(String[] args) {
+        // Crear una instancia de la clase IncidenteDao
+       // Solicitudes solicitudes = new Solicitudes();
+
+        // Definir las fechas de inicio y fin para la prueba
+        //String fechaInicio = "2023/01/01 00:00:00";
+        //String fechaFin = "2023/11/16 23:59:59";
+
+        // Llamar al método obtenerTotalesPorStatus y obtener los resultados
+        //List<String> totalesPorStatus = solicitudes.obtenerTotalesPorStatus(fechaInicio, fechaFin);
+
+        // Imprimir los resultados
+       // totalesPorStatus.forEach(System.out::println);
+    }
+}
+
+
+
+package controller;
+
+import dao.Solicitudes;
+import model.EstadoTotal;
+
+import javax.ws.rs.Produces;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.Path;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.util.List;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.WebApplicationException;
+
+
+
+
+@Path("solicitudes")
+public class SolicitudesController {
+    
+    private Solicitudes solicitudes = new Solicitudes();
+
+    public SolicitudesController() {
+    }
+    
+    
+    
+        
+        @GET
+        @Produces(javax.ws.rs.core.MediaType.APPLICATION_JSON)
+        public List<EstadoTotal> getTotalesPorStatus(@QueryParam("fechaInicio") String fechaInicio,
+                                                @QueryParam("fechaFin") String fechaFin) {
+            // Verifica que los parámetros no sean nulos o vacíos.
+            if (fechaInicio == null || fechaInicio.trim().isEmpty() || fechaFin == null || fechaFin.trim().isEmpty()) {
+             // Considera lanzar una excepción aquí o devolver una lista vacía.
+            throw new WebApplicationException("Las fechas de inicio y fin son requeridas.", Response.Status.BAD_REQUEST);
+             }
+    
+        try {
+            return solicitudes.obtenerTotalesPorStatus(fechaInicio, fechaFin);
+        } catch (Exception e) {
+            // Considera lanzar una excepción aquí o devolver una lista vacía.
+            throw new WebApplicationException("Error al procesar la solicitud: " + e.getMessage(), Response.Status.INTERNAL_SERVER_ERROR);
+        }
+       }
+   
+
+   /* @GET
+    @Produces(javax.ws.rs.core.MediaType.APPLICATION_JSON)
+    public List<String> getTotalesPorStatus(@QueryParam("fechaInicio") String fechaInicio,
+                                        @QueryParam("fechaFin") String fechaFin) {
+        // Verifica que los parámetros no sean nulos o vacíos.
+        if (fechaInicio == null || fechaInicio.trim().isEmpty() || fechaFin == null || fechaFin.trim().isEmpty()) {
+      //      return Response.status(Response.Status.BAD_REQUEST).entity("Las fechas de inicio y fin son requeridas.").build();
+        }
+        
+        try {
+            List<String> totalesPorStatus = solicitudes.obtenerTotalesPorStatus(fechaInicio, fechaFin);
+     //       return Response.ok(totalesPorStatus).build();
+        } catch (Exception e) {
+     //       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error al procesar la solicitud: " + e.getMessage()).build();
+        }
+    }*/
+    
+
+   http://localhost:8080/webresources/solicitudes?fechaInicio=2023/01/01%2000:00:00&fechaFin=2023/11/16%2023:59:59
+[
+  {
+    "estado": "Active",
+    "total": 712
+  },
+  {
+    "estado": "Cancelled",
+    "total": 48
+  },
+  {
+    "estado": "Closed",
+    "total": 11996
+  },
+  {
+    "estado": "Failed",
+    "total": 3309
+  },
+  {
+    "estado": "In Action",
+    "total": 15
+  },
+  {
+    "estado": "Resolved",
+    "total": 38
+  },
+  {
+    "estado": "Waiting",
+    "total": 28
+  },
+  {
+    "estado": "Waiting approval",
+    "total": 2
+  },
+  {
+    "estado": "Waiting for 3rd Party",
+    "total": 46
+  },
+  {
+    "estado": "Waiting for Customer",
+    "total": 19
+  },
+  {
+    "estado": "Waiting for Resolution",
+    "total": 1
+  }
+]
+
+
+   
+   
+}
+
+
+
+-------------CONSULTA YA HECHA OBTENER CANTIDAD DE SOLICITUDES--------------
+				SELECT Status, COUNT(*) as Total
+				FROM Incident
+				WHERE (
+				CreatedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN 
+				CONVERT(datetime, '2023/01/01 00:00:00', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' 
+				AND 
+				CONVERT(datetime, '2023/11/16 23:59:59', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time'
+				OR 
+				ResolvedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN 
+				CONVERT(datetime, '2023/01/01 00:00:00', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' 
+				AND 
+				CONVERT(datetime, '2023/11/16 23:59:59', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time'
+				)
+				GROUP BY Status
+				ORDER BY Status;
+--------------------------------------------------------------------------------------
+
+--------------------CONSULTA YA HECHA OBTENER CANTIDAD DE SOLICITUDES POR PAIS--------------
+	SELECT Status, AA_Pais, COUNT(*) as Total
+	FROM Incident
+	WHERE (
+    CreatedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN 
+					CONVERT(datetime, '2023/01/01 00:00:00', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' 
+					AND 
+					CONVERT(datetime, '2023/11/16 23:59:59', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time'
+					OR 
+					ResolvedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN 
+					CONVERT(datetime, '2023/01/01 00:00:00', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' 
+					AND 
+					CONVERT(datetime, '2023/11/16 23:59:59', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time'
+			)
+			AND AA_Pais = 'Panamá' 
+			GROUP BY Status, AA_Pais 
+			ORDER BY Status
+
+
+--------------------CONSULTA YA HECHA PARA OBTENER EL NUMERO DE SOLICITUDES QUE TIENE CADA ESTATUS POR PAIS--------------
+	SELECT 
+    AA_Pais,
+			SUM(CASE WHEN Status = 'Active' THEN 1 ELSE 0 END) AS Active,
+			SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS Cancelled,
+			SUM(CASE WHEN Status = 'Closed' THEN 1 ELSE 0 END) AS Closed,
+			SUM(CASE WHEN Status = 'Failed' THEN 1 ELSE 0 END) AS Failed,
+			SUM(CASE WHEN Status = 'In Action' THEN 1 ELSE 0 END) AS InAction,
+			SUM(CASE WHEN Status = 'Resolved' THEN 1 ELSE 0 END) AS Resolved,
+			SUM(CASE WHEN Status = 'Waiting' THEN 1 ELSE 0 END) AS Waiting,
+			SUM(CASE WHEN Status = 'Waiting approval' THEN 1 ELSE 0 END) AS Waitingapproval,
+			SUM(CASE WHEN Status = 'Waiting for 3rd Party' THEN 1 ELSE 0 END) AS Waitingfor3rdParty,
+			SUM(CASE WHEN Status = 'Waiting for Customer' THEN 1 ELSE 0 END) AS WaitingforCustomer,
+			SUM(CASE WHEN Status = 'Waiting for Resolution' THEN 1 ELSE 0 END) AS WaitingforResolution,
+			COUNT(*) as Total
+	FROM Incident
+	WHERE 
+			(CreatedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN 
+			CONVERT(datetime, '2023/01/01 00:00:00', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' 
+			AND 
+			CONVERT(datetime, '2023/11/16 23:59:59', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time'
+			OR 
+			ResolvedDateTime AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' BETWEEN 
+			CONVERT(datetime, '2023/01/01 00:00:00', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time' 
+			AND 
+			CONVERT(datetime, '2023/11/16 23:59:59', 120) AT TIME ZONE 'UTC' AT TIME ZONE 'Central America Standard Time')
+			AND 
+			AA_Pais IN ('Honduras', 'Guatemala', 'Nicaragua', 'Panamá')
+	GROUP BY AA_Pais	ORDER BY AA_Pais;
